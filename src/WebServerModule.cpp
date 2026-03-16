@@ -50,6 +50,24 @@ static String listSongsJson(){
   return out;
 }
 
+static String urlDecode(const String &s){
+  String out = "";
+  int len = s.length();
+  for(int i=0;i<len;i++){
+    char c = s[i];
+    if(c=='+') out += ' ';
+    else if(c=='%' && i+2 < len){
+      char hi = s[i+1];
+      char lo = s[i+2];
+      int v = 0;
+      if(hi>='0'&&hi<='9') v = (hi-'0')<<4; else if(hi>='A'&&hi<='F') v = (hi-'A'+10)<<4; else if(hi>='a'&&hi<='f') v = (hi-'a'+10)<<4;
+      if(lo>='0'&&lo<='9') v |= (lo-'0'); else if(lo>='A'&&lo<='F') v |= (lo-'A'+10); else if(lo>='a'&&lo<='f') v |= (lo-'a'+10);
+      out += (char)v; i+=2;
+    } else out += c;
+  }
+  return out;
+}
+
 void WebServerModule::handleRoot(){
   // Serve embedded HTML page (kept in src/web/web_root.h)
   server.send_P(200, "text/html", WEB_ROOT_INDEX);
@@ -77,8 +95,10 @@ void WebServerModule::begin(uint16_t port){
   server.on("/api/play", [](){
     if(server.hasArg("file")){
       String f = server.arg("file");
-      Serial.printf("[Web] /api/play requested file: %s\n", f.c_str());
-      bool ok = playerController.play(f);
+      String fname = urlDecode(f);
+      Serial.printf("[Web] /api/play requested (raw): %s\n", f.c_str());
+      Serial.printf("[Web] /api/play requested (decoded): %s\n", fname.c_str());
+      bool ok = playerController.play(fname);
       server.send(200, "application/json", String("{\"ok\":") + (ok?"true":"false") + "}");
     } else server.send(400, "text/plain", "missing file");
   });

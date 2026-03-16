@@ -27,8 +27,11 @@ void PlayerController::begin(){
 
 bool PlayerController::play(const String &fname){
   if(fname.length()==0) return false;
-  if(!SD.exists(fname.c_str())) return false;
+  Serial.printf("[Player] play requested: %s\n", fname.c_str());
+  if(!SD.exists(fname.c_str())){ Serial.println("[Player] SD.exists -> false"); return false; }
+  Serial.println("[Player] SD.exists -> true");
   bool ok = audio.connecttoFS(SD, fname.c_str());
+  Serial.printf("[Player] connecttoFS returned: %d\n", ok);
   if(ok){
     // find index for fname
     currentIndex = -1;
