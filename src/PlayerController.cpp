@@ -71,6 +71,11 @@ void PlayerController::setVolume(uint8_t v){
 uint8_t PlayerController::getVolume(){
   return audio.getVolume();
 }
+bool PlayerController::playCurrent(){
+  if(playlist.empty()) return false;
+  if(currentIndex < 0) currentIndex = 0;
+  return play(playlist[currentIndex]);
+}
 
 String PlayerController::statusJSON(){
   String s = "{";

@@ -13,6 +13,7 @@ public:
   bool getLoop();
   void setVolume(uint8_t v);
   uint8_t getVolume();
+  bool playCurrent();
   String statusJSON();
   void loop();
 private:
