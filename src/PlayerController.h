@@ -23,3 +23,6 @@ private:
   bool wasRunning = false;
   void buildPlaylist();
 };
+
+// single global instance (defined in main.cpp)
+extern PlayerController playerController;

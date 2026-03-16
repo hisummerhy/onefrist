@@ -5,8 +5,6 @@
 #include "PlayerController.h"
 #include "web/web_root.h"
 
-static PlayerController player;
-
 static WebServer server(80);
 
 static String listSongsHtml(){
@@ -73,28 +71,28 @@ void WebServerModule::handleMusic(){
 }
 
 void WebServerModule::begin(uint16_t port){
-  player.begin();
+  // PlayerController is initialized in main.cpp; do not reinitialize here.
   server.on("/", [](){ WebServerModule ws; ws.handleRoot(); });
   server.on("/music", [](){ WebServerModule ws; ws.handleMusic(); });
   server.on("/api/play", [](){
     if(server.hasArg("file")){
       String f = server.arg("file");
-      bool ok = player.play(f);
+      bool ok = playerController.play(f);
       server.send(200, "application/json", String("{\"ok\":") + (ok?"true":"false") + "}");
     } else server.send(400, "text/plain", "missing file");
   });
-  server.on("/api/play_current", [](){ bool ok = player.playCurrent(); server.send(200, "application/json", String("{\"ok\":") + (ok?"true":"false") + "}"); });
+  server.on("/api/play_current", [](){ bool ok = playerController.playCurrent(); server.send(200, "application/json", String("{\"ok\":") + (ok?"true":"false") + "}"); });
   server.on("/api/list", [](){ server.send(200, "application/json", listSongsJson()); });
-  server.on("/api/stop", [](){ player.stop(); server.send(200, "application/json", "{\"ok\":true}"); });
-  server.on("/api/next", [](){ player.next(); server.send(200, "application/json", "{\"ok\":true}"); });
-  server.on("/api/prev", [](){ player.prev(); server.send(200, "application/json", "{\"ok\":true}"); });
+  server.on("/api/stop", [](){ playerController.stop(); server.send(200, "application/json", "{\"ok\":true}"); });
+  server.on("/api/next", [](){ playerController.next(); server.send(200, "application/json", "{\"ok\":true}"); });
+  server.on("/api/prev", [](){ playerController.prev(); server.send(200, "application/json", "{\"ok\":true}"); });
   server.on("/api/toggleLoop", [](){
     bool val = server.hasArg("val") && server.arg("val")=="1";
-    player.setLoop(val);
+    playerController.setLoop(val);
     server.send(200, "application/json", String("{\"loop\":") + (val?"true":"false") + "}");
   });
-  server.on("/api/volume", [](){ if(server.hasArg("val")){ uint8_t v = server.arg("val").toInt(); player.setVolume(v);} server.send(200, "application/json", "{\"ok\":true}"); });
-  server.on("/api/status", [](){ server.send(200, "application/json", player.statusJSON()); });
+  server.on("/api/volume", [](){ if(server.hasArg("val")){ uint8_t v = server.arg("val").toInt(); playerController.setVolume(v);} server.send(200, "application/json", "{\"ok\":true}"); });
+  server.on("/api/status", [](){ server.send(200, "application/json", playerController.statusJSON()); });
   server.begin();
   Serial.println("Web server started on port 80");
 }
