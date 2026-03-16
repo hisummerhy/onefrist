@@ -77,11 +77,12 @@ void WebServerModule::begin(uint16_t port){
   server.on("/api/play", [](){
     if(server.hasArg("file")){
       String f = server.arg("file");
+      Serial.printf("[Web] /api/play requested file: %s\n", f.c_str());
       bool ok = playerController.play(f);
       server.send(200, "application/json", String("{\"ok\":") + (ok?"true":"false") + "}");
     } else server.send(400, "text/plain", "missing file");
   });
-  server.on("/api/play_current", [](){ bool ok = playerController.playCurrent(); server.send(200, "application/json", String("{\"ok\":") + (ok?"true":"false") + "}"); });
+  server.on("/api/play_current", [](){ Serial.println("[Web] /api/play_current"); bool ok = playerController.playCurrent(); server.send(200, "application/json", String("{\"ok\":") + (ok?"true":"false") + "}"); });
   server.on("/api/list", [](){ server.send(200, "application/json", listSongsJson()); });
   server.on("/api/stop", [](){ playerController.stop(); server.send(200, "application/json", "{\"ok\":true}"); });
   server.on("/api/next", [](){ playerController.next(); server.send(200, "application/json", "{\"ok\":true}"); });
