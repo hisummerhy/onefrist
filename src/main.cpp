@@ -2,6 +2,9 @@
 #include <SPI.h>
 #include <SD.h>
 #include <Audio.h>
+#include "WiFiManager.h"
+#include "DisplayManager.h"
+#include "WebServerModule.h"
 
 // I2S pins (adjust if your board wiring differs)
 #define I2S_DOUT      39
@@ -48,6 +51,16 @@ void setup(){
   delay(200);
   Serial.println("mp3_player (independent): start");
 
+  // 初始化模块
+  WiFiManager wifi;
+  DisplayManager display;
+  WebServerModule web;
+
+  display.begin();
+  wifi.begin("Office", "13906831000");
+  display.showIP(wifi.getIP());
+  web.begin();
+
   pinMode(SD_CS, OUTPUT);
   digitalWrite(SD_CS, HIGH);
   SD_SPI.begin(SD_SCK, SD_MISO, SD_MOSI);
@@ -78,5 +91,7 @@ void setup(){
 
 void loop(){
   audio.loop();
+  // 让 web server 处理请求
+  WebServerModule ws; ws.loop();
   delay(5);
 }
