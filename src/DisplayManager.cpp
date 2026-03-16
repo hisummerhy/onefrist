@@ -13,7 +13,7 @@ void DisplayManager::begin(){
   tft.init();
   tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
-  tft.setTextSize(2);
+  tft.setTextSize(4);
   tft.setTextColor(TFT_WHITE);
 #else
   Serial.println("Display: TFT_eSPI not available, falling back to Serial");

@@ -5,6 +5,7 @@
 #include "WiFiManager.h"
 #include "DisplayManager.h"
 #include "WebServerModule.h"
+#include "PlayerController.h"
 
 // I2S pins (adjust if your board wiring differs)
 #define I2S_DOUT      39
@@ -20,6 +21,8 @@
 SPIClass SD_SPI(HSPI);
 
 Audio audio;
+// Player controller instance (used by web server)
+PlayerController playerController;
 const int AUDIO_VOLUME = 12; // 0..21
 
 String songs[128];
@@ -55,6 +58,8 @@ void setup(){
   WiFiManager wifi;
   DisplayManager display;
   WebServerModule web;
+  // initialize player controller
+  playerController.begin();
 
   display.begin();
   wifi.begin("Office", "13906831000");
@@ -91,7 +96,9 @@ void setup(){
 
 void loop(){
   audio.loop();
-  // 让 web server 处理请求
+  // let player controller handle end-of-track/looping
+  playerController.loop();
+  // web server handle requests
   WebServerModule ws; ws.loop();
   delay(5);
 }
