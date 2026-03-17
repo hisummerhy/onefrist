@@ -273,9 +273,11 @@ void PlayerController::loop(){
   if(dur > 0){
     // 当文件有时长时，优先使用位置判断。但要避免在刚刚开始播放（pos==0）时立即误判为结束。
     bool posBased = false;
-    if(pos + 1500 >= dur){
+    // only consider position-based end detection when we have a non-zero position
+    if(pos > 0 && pos + 1500 >= dur){
       // 允许通过的条件：要么播放已走过较长时间（pos>1000），
-      // 要么自播放开始已过去一小段时间（>500ms），以防 connect/解码延迟导致 pos 仍为 0
+      // 要么自播放开始已过去一小段时间（>2000ms）且 audio 正在运行，
+      // 以防 connect/解码延迟导致 pos 仍为 0
       if(pos > 1000 || (lastPlayStartedAt != 0 && millis() - lastPlayStartedAt > 2000 && audio.isRunning())){
         posBased = true;
       }
