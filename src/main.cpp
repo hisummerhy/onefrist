@@ -96,7 +96,7 @@ void setup(){
     int idx = random(song_count);
     const char *sel = songs[idx].c_str();
     Serial.printf("Playing SD: %s\n", sel);
-    audio.connecttoFS(SD, sel);
+    // audio.connecttoFS(SD, sel);
   } else {
     Serial.println("No MP3 found on SD.");
   }
@@ -111,9 +111,20 @@ void loop(){
   static unsigned long lastTelemetry = 0;
   if(millis() - lastTelemetry > 10000){
     lastTelemetry = millis();
-    Serial.printf("telemetry: ms=%lu freeHeap=%u playlist=%d queue=%d\n", millis(), ESP.getFreeHeap(), playerController.getPlaylistSize(), playerController.getQueueSize());
-    // print recent actions for quick diagnostics
+    Serial.printf("telemetry: ms=%lu freeHeap=%u playlist=%d queue=%d running=%d pos=%u dur=%u\n",
+                  millis(), ESP.getFreeHeap(), playerController.getPlaylistSize(), playerController.getQueueSize(),
+                  audio.isRunning()?1:0, audio.getAudioCurrentTime(), audio.getAudioFileDuration());
+    // print last play debug and recent actions for quick diagnostics
+    Serial.printf("lastPlayDebug: %s\n", playerController.getLastPlayDebug().c_str());
     Serial.println(playerController.recentActionsJSON());
   }
   delay(5);
+}
+
+// Audio library weak callback invoked when an MP3 file reaches EOF.
+// Using this callback lets us advance the playlist exactly when decoding finishes.
+void audio_eof_mp3(const char* filename){
+  Serial.printf("[Audio] EOF mp3: %s\n", filename?filename:"(null)");
+  // advance to next track via PlayerController (will enqueue play)
+  playerController.next();
 }
