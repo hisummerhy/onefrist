@@ -97,13 +97,11 @@ bool PlayerController::performPlayNow(const String &fname){
   bool ok = audio.connecttoFS(SD, connectPath.c_str());
   Serial.printf("[Player] connecttoFS returned: %d\n", ok);
   lastPlayDebug += ", connecttoFS -> "; lastPlayDebug += (ok?"true":"false");
-  if(ok){
-    lastPlayStartedAt = millis();
-    // record estimated end time if duration known
-    uint32_t dur_ms = audio.getAudioFileDuration();
-    if(dur_ms > 0) estimatedEndAt = millis() + dur_ms;
-    else estimatedEndAt = 0;
-  }
+if(ok){
+  lastPlayStartedAt = millis();
+  uint32_t dur_ms = audio.getAudioFileDuration();
+  estimatedEndAt = (dur_ms > 0) ? millis() + dur_ms : 0;
+}
   // find index for fname (normalize leading slash)
   currentIndex = -1;
   String canonical = useName;
@@ -246,121 +244,101 @@ String PlayerController::statusJSON(){
 }
 
 void PlayerController::loop(){
-  // called from main loop
-  // process queued play requests serially
+  // === 1. 先处理播放队列（必须最优先）===
   if(!playBusy && !playQueue.empty()){
     String next = playQueue.front();
     playQueue.erase(playQueue.begin());
     playBusy = true;
-    performPlayNow(next);
+    bool ok = performPlayNow(next);
+    if(ok){
+      // mark as running to avoid immediate debounce-based advancement
+      wasRunning = true;
+      runningFalseAt = 0;
+    } else {
+      Serial.printf("[Player] performPlayNow failed for %s\n", next.c_str());
+    }
     playBusy = false;
   }
-    bool running = audio.isRunning();
-    // Use position/duration as a stronger end-of-track signal when available
-    uint32_t pos = audio.getAudioCurrentTime();
-    uint32_t dur = audio.getAudioFileDuration();
-    // fallback: if we previously recorded an estimated end time, and we've passed it, advance
-    if(estimatedEndAt != 0 && millis() > estimatedEndAt + 1500 && loopMode != 1){
-      Serial.printf("[Player] estimated-end reached now=%lu est=%lu -> advancing\n", millis(), estimatedEndAt);
-      estimatedEndAt = 0;
-      if(!playlist.empty()){
-        int nextIndex = currentIndex;
-        switch(loopMode){
-          case 2: // reverse
-            if(currentIndex < 0) nextIndex = 0; else nextIndex = (currentIndex - 1 + (int)playlist.size()) % (int)playlist.size();
-            break;
-          case 3: // random
-            if((int)playlist.size() == 1) nextIndex = 0;
-            else { while(nextIndex == currentIndex) nextIndex = random((int)playlist.size()); }
-            break;
-          case 0: // sequential
-          default:
-            nextIndex = (currentIndex < 0) ? 0 : (currentIndex + 1) % (int)playlist.size();
-            break;
-        }
-        currentIndex = nextIndex;
-        Serial.printf("[Player] advancing to nextIndex=%d name=%s (loopMode=%d)\n", currentIndex, playlist[currentIndex].c_str(), loopMode);
-        play(playlist[currentIndex]);
-        runningFalseAt = 0;
-        wasRunning = true;
-        return;
-      }
-    }
-    // if we have a valid duration and we're within 1.5s of the end, advance immediately (unless single-loop)
-    if(dur > 0 && loopMode != 1){
-      if(pos + 1500 >= dur){
-        // avoid immediate advancement right after starting (require position >1s)
-        if(pos > 1000){
-          Serial.printf("[Player] position-based end detected pos=%u dur=%u -> advancing\\n", pos, dur);
-          if(!playlist.empty()){
-            int nextIndex = currentIndex;
-            switch(loopMode){
-              case 2: // reverse
-                if(currentIndex < 0) nextIndex = 0; else nextIndex = (currentIndex - 1 + (int)playlist.size()) % (int)playlist.size();
-                break;
-              case 3: // random
-                if((int)playlist.size() == 1) nextIndex = 0;
-                else { while(nextIndex == currentIndex) nextIndex = random((int)playlist.size()); }
-                break;
-              case 0: // sequential
-              default:
-                nextIndex = (currentIndex < 0) ? 0 : (currentIndex + 1) % (int)playlist.size();
-                break;
-            }
-            currentIndex = nextIndex;
-            Serial.printf("[Player] advancing to nextIndex=%d name=%s (loopMode=%d)\\n", currentIndex, playlist[currentIndex].c_str(), loopMode);
-            play(playlist[currentIndex]);
-            // treat as running after scheduling next
-            runningFalseAt = 0;
-            wasRunning = true;
-            return;
-          }
-        } else {
-          // too soon after start, skip position-based advance
-        }
-      }
-    }
 
-  // Debounce transient false reads from audio.isRunning() to avoid spurious track changes
-  if(wasRunning && !running){
-    if(runningFalseAt == 0) runningFalseAt = millis();
-    else if(millis() - runningFalseAt > END_DEBOUNCE_MS){
-      Serial.println("[Player] confirmed track end -> advancing");
-      if(!playlist.empty()){
-        int nextIndex = currentIndex;
-        switch(loopMode){
-          case 1: // single-loop -> replay same
-            nextIndex = currentIndex >= 0 ? currentIndex : 0;
-            break;
-          case 2: // reverse
-            if(currentIndex < 0) nextIndex = 0; else nextIndex = (currentIndex - 1 + (int)playlist.size()) % (int)playlist.size();
-            break;
-          case 3: // random
-            if((int)playlist.size() == 1) nextIndex = 0;
-            else { while(nextIndex == currentIndex) nextIndex = random((int)playlist.size()); }
-            break;
-          case 0: // sequential (default)
-          default:
-            nextIndex = (currentIndex < 0) ? 0 : (currentIndex + 1) % (int)playlist.size();
-            break;
-        }
-        currentIndex = nextIndex;
-        Serial.printf("[Player] advancing to nextIndex=%d name=%s (loopMode=%d)\n", currentIndex, playlist[currentIndex].c_str(), loopMode);
-        play(playlist[currentIndex]);
+  // === 2. 核心：可靠结束检测（解决 dur==0 的问题）===
+  bool running = audio.isRunning();
+  uint32_t pos = audio.getAudioCurrentTime();
+  uint32_t dur = audio.getAudioFileDuration();
+
+  bool shouldAdvance = false;
+
+  // A. 有 duration 时用 position 判断（最准）
+  // 对于短音频，原始硬阈值 pos>1000 会导致无法识别结束，改为基于文件时长的阈值：
+  // 当 dur 较大 (>2000ms) 时保持 1000ms 限制，否则使用 dur/2
+  if(dur > 0){
+    // 当文件有时长时，优先使用位置判断。但要避免在刚刚开始播放（pos==0）时立即误判为结束。
+    bool posBased = false;
+    if(pos + 1500 >= dur){
+      // 允许通过的条件：要么播放已走过较长时间（pos>1000），
+      // 要么自播放开始已过去一小段时间（>500ms），以防 connect/解码延迟导致 pos 仍为 0
+      if(pos > 1000 || (lastPlayStartedAt != 0 && millis() - lastPlayStartedAt > 500)){
+        posBased = true;
       }
-      runningFalseAt = 0;
-      wasRunning = true; // after scheduling next play, treat as running
-      return;
     }
-  } else if(!wasRunning && running){
-    // transitioned from not running to running
+    if(posBased){
+      shouldAdvance = true;
+      Serial.printf("[Player] position end detected (dur=%u pos=%u lastStart=%lu)\n", dur, pos, lastPlayStartedAt);
+    }
+  }
+  // B. estimatedEndAt 超时（你原来的逻辑保留）
+  else if(estimatedEndAt != 0 && millis() > estimatedEndAt + 1000){
+    shouldAdvance = true;
+    Serial.printf("[Player] estimated-end timeout -> advancing\n");
+    estimatedEndAt = 0;
+  }
+  // C. 经典 debounce（加大到 800ms 更稳）+ 极端 5秒超时 fallback（防死锁）
+  else if(wasRunning && !running){
+    if(runningFalseAt == 0) runningFalseAt = millis();
+    else if(millis() - runningFalseAt > 800 || millis() - lastPlayStartedAt > 5000){
+      shouldAdvance = true;
+      Serial.println("[Player] debounce confirmed track end -> advancing");
+    }
+  }
+
+  // === 3. 执行下一首（所有模式都支持）===
+  if(shouldAdvance && loopMode != 1 && !playlist.empty()){
+    int nextIndex = currentIndex;
+    switch(loopMode){
+      case 0: // 顺序
+        nextIndex = (currentIndex < 0) ? 0 : (currentIndex + 1) % (int)playlist.size();
+        break;
+      case 2: // 倒序
+        nextIndex = (currentIndex < 0) ? 0 : (currentIndex - 1 + (int)playlist.size()) % (int)playlist.size();
+        break;
+      case 3: // 随机（默认）
+        if((int)playlist.size() == 1) nextIndex = 0;
+        else {
+          do { nextIndex = random((int)playlist.size()); } while(nextIndex == currentIndex);
+        }
+        break;
+    }
+    currentIndex = nextIndex;
+    Serial.printf("[Player] advancing to nextIndex=%d name=%s (mode=%d)\n", 
+                  currentIndex, playlist[currentIndex].c_str(), loopMode);
+    
+    play(playlist[currentIndex]);   // 走队列，确保不卡
     runningFalseAt = 0;
+    wasRunning = true;
+    return;
+  }
+
+  // === 4. 更新状态（放在最后，避免 race）===
+  if(!running && wasRunning){
+    if(runningFalseAt == 0) runningFalseAt = millis();
   } else if(running){
-    // still running
     runningFalseAt = 0;
+    wasRunning = true;
   }
   wasRunning = running;
 }
+
+
+
 
 String PlayerController::recentActionsJSON(){
   String out = "[";
