@@ -7,6 +7,7 @@ public:
   void begin();
   bool play(const String &fname); // enqueue play request
   String getLastPlayDebug();
+  String getCurrentName();
   void stop();
   void next();
   void prev();

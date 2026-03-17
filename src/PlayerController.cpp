@@ -136,6 +136,11 @@ String PlayerController::getLastPlayDebug(){
   return lastPlayDebug;
 }
 
+String PlayerController::getCurrentName(){
+  if(currentIndex>=0 && currentIndex < (int)playlist.size()) return playlist[currentIndex];
+  return String("");
+}
+
 void PlayerController::stop(){
   audio.stopSong();
 }
@@ -260,77 +265,13 @@ void PlayerController::loop(){
     playBusy = false;
   }
 
-  // === 2. 核心：可靠结束检测（解决 dur==0 的问题）===
+  // === 2. 自动切歌已由 audio_eof_mp3 回调接管 ===
+  // 为避免误判，本控制器不再通过轮询位置/估算/去抖自动推进下一首。
+  // 音频库在真正播放完毕时会调用弱符号回调 audio_eof_mp3，由该回调触发
+  // `playerController.next()` 来安全地播放下一首。
   bool running = audio.isRunning();
   uint32_t pos = audio.getAudioCurrentTime();
   uint32_t dur = audio.getAudioFileDuration();
-
-  bool shouldAdvance = false;
-
-  // A. 有 duration 时用 position 判断（最准）
-  // 对于短音频，原始硬阈值 pos>1000 会导致无法识别结束，改为基于文件时长的阈值：
-  // 当 dur 较大 (>2000ms) 时保持 1000ms 限制，否则使用 dur/2
-  if(dur > 0){
-    // 当文件有时长时，优先使用位置判断。但要避免在刚刚开始播放（pos==0）时立即误判为结束。
-    bool posBased = false;
-    // only consider position-based end detection when we have progressed into the track
-    // require a minimum progress threshold to avoid false positives when pos is near 0
-    if(pos > 0){
-      uint32_t progressReq = (dur / 4u);
-      if(progressReq > 1000u) progressReq = 1000u; // cap at 1s
-      if(pos > progressReq && pos + 1500 >= dur){
-        // allow if we've progressed sufficiently (pos>1000) or a grace period passed and audio reports running
-        if(pos > 1000 || (lastPlayStartedAt != 0 && millis() - lastPlayStartedAt > 2000 && audio.isRunning())){
-          posBased = true;
-        }
-      }
-    }
-    if(posBased){
-      shouldAdvance = true;
-      Serial.printf("[Player] position end detected (dur=%u pos=%u lastStart=%lu)\n", dur, pos, lastPlayStartedAt);
-    }
-  }
-  // B. estimatedEndAt 超时（你原来的逻辑保留）
-  else if(estimatedEndAt != 0 && millis() > estimatedEndAt + 1000){
-    shouldAdvance = true;
-    Serial.printf("[Player] estimated-end timeout -> advancing\n");
-    estimatedEndAt = 0;
-  }
-  // C. 经典 debounce（加大到 800ms 更稳）+ 极端 5秒超时 fallback（防死锁）
-  else if(wasRunning && !running){
-    if(runningFalseAt == 0) runningFalseAt = millis();
-    else if(millis() - runningFalseAt > 800 || millis() - lastPlayStartedAt > 5000){
-      shouldAdvance = true;
-      Serial.println("[Player] debounce confirmed track end -> advancing");
-    }
-  }
-
-  // === 3. 执行下一首（所有模式都支持）===
-  if(shouldAdvance && loopMode != 1 && !playlist.empty()){
-    int nextIndex = currentIndex;
-    switch(loopMode){
-      case 0: // 顺序
-        nextIndex = (currentIndex < 0) ? 0 : (currentIndex + 1) % (int)playlist.size();
-        break;
-      case 2: // 倒序
-        nextIndex = (currentIndex < 0) ? 0 : (currentIndex - 1 + (int)playlist.size()) % (int)playlist.size();
-        break;
-      case 3: // 随机（默认）
-        if((int)playlist.size() == 1) nextIndex = 0;
-        else {
-          do { nextIndex = random((int)playlist.size()); } while(nextIndex == currentIndex);
-        }
-        break;
-    }
-    currentIndex = nextIndex;
-    Serial.printf("[Player] advancing to nextIndex=%d name=%s (mode=%d)\n", 
-                  currentIndex, playlist[currentIndex].c_str(), loopMode);
-    
-    play(playlist[currentIndex]);   // 走队列，确保不卡
-    runningFalseAt = 0;
-    wasRunning = true;
-    return;
-  }
 
   // === 4. 更新状态（放在最后，避免 race）===
   if(!running && wasRunning){

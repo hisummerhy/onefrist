@@ -24,6 +24,7 @@ SPIClass SD_SPI(HSPI);
 Audio audio;
 // Player controller instance (used by web server)
 PlayerController playerController;
+DisplayManager display;
 const int AUDIO_VOLUME = 12; // 0..21
 
 String songs[128];
@@ -60,7 +61,6 @@ void setup(){
 
   // 初始化模块
   WiFiManager wifi;
-  DisplayManager display;
   WebServerModule web;
   // initialize player controller
   display.begin();
@@ -108,6 +108,17 @@ void loop(){
   playerController.loop();
   // web server handle requests
   WebServerModule ws; ws.loop();
+  // update display at ~500ms intervals
+  static unsigned long lastDisplayMs = 0;
+  if(millis() - lastDisplayMs > 500){
+    lastDisplayMs = millis();
+    String cur = playerController.getCurrentName();
+    uint32_t pos = audio.getAudioCurrentTime();
+    uint32_t dur = audio.getAudioFileDuration();
+    uint8_t pct = 0;
+    if(dur > 0) pct = (uint8_t)min(100, (int)((pos * 100) / dur));
+    display.showNowPlaying(cur, pos, dur, pct);
+  }
   static unsigned long lastTelemetry = 0;
   if(millis() - lastTelemetry > 10000){
     lastTelemetry = millis();
