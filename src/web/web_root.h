@@ -88,6 +88,7 @@ static const char WEB_ROOT_INDEX[] PROGMEM = R"rawliteral(
 
   let dragging = false;
   let lastDurationSec = 0;
+  let lastDurationMs = 0;
   async function status(){
     const r = await fetch('/api/status');
     const j = await r.json();
@@ -103,6 +104,7 @@ static const char WEB_ROOT_INDEX[] PROGMEM = R"rawliteral(
     document.getElementById('device').innerText = '设备 IP：' + (location.hostname || '');
     const pos = j.position_ms || 0;
     const dur = j.duration_ms || 0;
+    lastDurationMs = dur;
     lastDurationSec = Math.floor(dur/1000);
     const percent = dur? Math.floor((pos/dur)*100):0;
     if(!dragging){
@@ -133,26 +135,34 @@ static const char WEB_ROOT_INDEX[] PROGMEM = R"rawliteral(
   const prog = document.getElementById('prog');
   // use pointer events so mouse/touch work consistently
   prog.addEventListener('pointerdown', ()=>{ dragging = true; });
-  // while dragging, update the shown position based on current slider value
+  // while dragging, update the shown position based on current slider value (use ms precision)
   prog.addEventListener('pointermove', ()=>{
     if(!dragging) return;
     const pct = parseInt(prog.value);
-    if(lastDurationSec){
-      const sec = Math.round((pct/100)*lastDurationSec);
+    if(lastDurationMs){
+      const sec = Math.round((pct/100)*(lastDurationMs/1000));
       document.getElementById('pos').innerText = formatMs(sec*1000);
     }
   });
+  // on pointerup (after dragging) perform seek
   window.addEventListener('pointerup', async (e)=>{
     if(!dragging) return;
     dragging = false;
     const pct = parseInt(prog.value);
-    if(!lastDurationSec){
-      // cannot seek unknown-duration tracks
+    if(!lastDurationMs){
       console.warn('seek ignored: unknown duration');
       status();
       return;
     }
-    const sec = Math.round((pct/100)*lastDurationSec);
+    const sec = Math.round((pct/100)*(lastDurationMs/1000));
+    try{ await fetch('/api/seek?sec='+sec); }catch(e){ console.error('seek failed', e); }
+    status();
+  });
+  // also support quick clicks (no pointerdown/pointermove sequence on some browsers)
+  prog.addEventListener('click', async (e)=>{
+    const pct = parseInt(prog.value);
+    if(!lastDurationMs){ console.warn('seek ignored: unknown duration'); status(); return; }
+    const sec = Math.round((pct/100)*(lastDurationMs/1000));
     try{ await fetch('/api/seek?sec='+sec); }catch(e){ console.error('seek failed', e); }
     status();
   });
