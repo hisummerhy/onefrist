@@ -276,7 +276,7 @@ void PlayerController::loop(){
     if(pos + 1500 >= dur){
       // 允许通过的条件：要么播放已走过较长时间（pos>1000），
       // 要么自播放开始已过去一小段时间（>500ms），以防 connect/解码延迟导致 pos 仍为 0
-      if(pos > 1000 || (lastPlayStartedAt != 0 && millis() - lastPlayStartedAt > 500)){
+      if(pos > 1000 || (lastPlayStartedAt != 0 && millis() - lastPlayStartedAt > 2000 && audio.isRunning())){
         posBased = true;
       }
     }
