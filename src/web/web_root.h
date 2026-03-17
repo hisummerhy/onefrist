@@ -105,8 +105,11 @@ static const char WEB_ROOT_INDEX[] PROGMEM = R"rawliteral(
     const dur = j.duration_ms || 0;
     lastDurationSec = Math.floor(dur/1000);
     const percent = dur? Math.floor((pos/dur)*100):0;
-    if(!dragging){ document.getElementById('prog').value = percent; }
-    document.getElementById('pos').innerText = formatMs(pos);
+    if(!dragging){
+      document.getElementById('prog').value = percent;
+      document.getElementById('pos').innerText = formatMs(pos);
+    }
+    // always update duration display (helpful even while dragging)
     document.getElementById('dur').innerText = formatMs(dur);
     fetchList();
   }
@@ -130,11 +133,26 @@ static const char WEB_ROOT_INDEX[] PROGMEM = R"rawliteral(
   const prog = document.getElementById('prog');
   // use pointer events so mouse/touch work consistently
   prog.addEventListener('pointerdown', ()=>{ dragging = true; });
+  // while dragging, update the shown position based on current slider value
+  prog.addEventListener('pointermove', ()=>{
+    if(!dragging) return;
+    const pct = parseInt(prog.value);
+    if(lastDurationSec){
+      const sec = Math.round((pct/100)*lastDurationSec);
+      document.getElementById('pos').innerText = formatMs(sec*1000);
+    }
+  });
   window.addEventListener('pointerup', async (e)=>{
     if(!dragging) return;
     dragging = false;
     const pct = parseInt(prog.value);
-    const sec = lastDurationSec ? Math.round((pct/100)*lastDurationSec) : 0;
+    if(!lastDurationSec){
+      // cannot seek unknown-duration tracks
+      console.warn('seek ignored: unknown duration');
+      status();
+      return;
+    }
+    const sec = Math.round((pct/100)*lastDurationSec);
     try{ await fetch('/api/seek?sec='+sec); }catch(e){ console.error('seek failed', e); }
     status();
   });
