@@ -60,10 +60,12 @@ void DisplayManager::showNowPlaying(const String &title, uint32_t pos_ms, uint32
     if(fillW > 0) sprite->fillRect(barX, barY, fillW, barH, TFT_GREEN);
     // time
     auto fmt = [](uint32_t ms)->String{ uint32_t s = ms/1000; uint32_t m = s/60; s = s%60; char buf[16]; sprintf(buf, "%u:%02u", (unsigned)m, (unsigned)s); return String(buf); };
+    String posStr = fmt(pos_ms);
+    String durStr = (dur_ms==0) ? String("--:--") : fmt(dur_ms);
     sprite->setCursor(4, 48);
-    sprite->print(fmt(pos_ms));
+    sprite->print(posStr);
     sprite->setCursor(sprite->width()-60, 48);
-    sprite->print(fmt(dur_ms));
+    sprite->print(durStr);
     // push sprite to top-left (only this region is updated)
     sprite->pushSprite(0, 0);
   } else {
@@ -80,10 +82,12 @@ void DisplayManager::showNowPlaying(const String &title, uint32_t pos_ms, uint32
     int fillW = (barW * percent) / 100;
     if(fillW > 0) tft.fillRect(barX, barY, fillW, barH, TFT_GREEN);
     auto fmt = [](uint32_t ms)->String{ uint32_t s = ms/1000; uint32_t m = s/60; s = s%60; char buf[16]; sprintf(buf, "%u:%02u", (unsigned)m, (unsigned)s); return String(buf); };
+    String posStr = fmt(pos_ms);
+    String durStr = (dur_ms==0) ? String("--:--") : fmt(dur_ms);
     tft.setCursor(4, 48);
-    tft.print(fmt(pos_ms));
+    tft.print(posStr);
     tft.setCursor(tft.width()-60, 48);
-    tft.print(fmt(dur_ms));
+    tft.print(durStr);
   }
 #else
   Serial.printf("NowPlaying: %s %u/%u (%u%%)\n", title.c_str(), pos_ms, dur_ms, percent);
