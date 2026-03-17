@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <Audio.h>
+#include <esp_system.h>
 #include "WiFiManager.h"
 #include "DisplayManager.h"
 #include "WebServerModule.h"
@@ -54,13 +55,14 @@ void setup(){
   delay(200);
   Serial.println("mp3_player (independent): start");
 
+  // print last reset reason for diagnostics
+  Serial.printf("Reset reason: %d\n", esp_reset_reason());
+
   // 初始化模块
   WiFiManager wifi;
   DisplayManager display;
   WebServerModule web;
   // initialize player controller
-  playerController.begin();
-
   display.begin();
   wifi.begin("Office", "13906831000");
   display.showIP(wifi.getIP());
@@ -77,8 +79,14 @@ void setup(){
     Serial.println("Card Mount Success");
     uint8_t cardType = SD.cardType();
     Serial.printf("SD card type: %d\n", cardType);
+    // raise SPI frequency after mount for smoother streaming
+    SD_SPI.setFrequency(8000000);
+    Serial.println("SD SPI frequency raised to 8 MHz");
     scanSD();
   }
+
+  // now that SD is mounted and scanned, initialize player playlist
+  playerController.begin();
 
   audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
   audio.setVolume(AUDIO_VOLUME);
@@ -100,5 +108,12 @@ void loop(){
   playerController.loop();
   // web server handle requests
   WebServerModule ws; ws.loop();
+  static unsigned long lastTelemetry = 0;
+  if(millis() - lastTelemetry > 10000){
+    lastTelemetry = millis();
+    Serial.printf("telemetry: ms=%lu freeHeap=%u playlist=%d queue=%d\n", millis(), ESP.getFreeHeap(), playerController.getPlaylistSize(), playerController.getQueueSize());
+    // print recent actions for quick diagnostics
+    Serial.println(playerController.recentActionsJSON());
+  }
   delay(5);
 }
