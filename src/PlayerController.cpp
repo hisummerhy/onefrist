@@ -236,10 +236,13 @@ String PlayerController::statusJSON(){
   s += "\"volume\": " + String(getVolume()) + ",";
   uint32_t pos = audio.getAudioCurrentTime();
   uint32_t dur = audio.getAudioFileDuration();
+  // audio library reports seconds; convert to milliseconds for the API
+  uint32_t pos_ms = pos * 1000u;
+  uint32_t dur_ms = dur * 1000u;
   uint32_t percent = 0;
   if(dur > 0) percent = (pos * 100) / dur;
-  s += "\"position_ms\": " + String(pos) + ",";
-  s += "\"duration_ms\": " + String(dur) + ",";
+  s += "\"position_ms\": " + String(pos_ms) + ",";
+  s += "\"duration_ms\": " + String(dur_ms) + ",";
   s += "\"percent\": " + String(percent) + ",";
   String cur = "";
   if(currentIndex>=0 && currentIndex < (int)playlist.size()) cur = playlist[currentIndex];
