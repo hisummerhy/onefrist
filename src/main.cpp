@@ -26,6 +26,8 @@ Audio audio;
 PlayerController playerController;
 DisplayManager display;
 const int AUDIO_VOLUME = 12; // 0..21
+// set to true to enable showing now-playing on the TFT; set false to disable temporarily
+bool enableDisplayNowPlaying = true;
 
 String songs[128];
 int song_count = 0;
@@ -64,6 +66,8 @@ void setup(){
   WebServerModule web;
   // initialize player controller
   display.begin();
+  // enable now-playing rendering
+  display.setNowPlayingEnabled(true);
   wifi.begin("Office", "13906831000");
   display.showIP(wifi.getIP());
   web.begin();
@@ -117,7 +121,9 @@ void loop(){
     uint32_t dur = audio.getAudioFileDuration();
     uint8_t pct = 0;
     if(dur > 0) pct = (uint8_t)min(100, (int)((pos * 100) / dur));
-    display.showNowPlaying(cur, pos, dur, pct);
+    if(enableDisplayNowPlaying){
+      display.showNowPlaying(cur, pos, dur, pct);
+    }
   }
   static unsigned long lastTelemetry = 0;
   if(millis() - lastTelemetry > 10000){
