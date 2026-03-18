@@ -33,11 +33,11 @@ void DisplayManager::begin(){
 
 void DisplayManager::showIP(const String &ip){
 #if HAS_TFT
-  tft->fillScreen(TFT_BLACK);
-  tft->setCursor(0, 20);
-  tft->print("IP:");
-  tft->setCursor(0, 44);
-  tft->print(ip);
+  tft.fillScreen(TFT_BLACK);
+  tft.setCursor(0, 20);
+  tft.print("IP:");
+  tft.setCursor(0, 44);
+  tft.print(ip);
 #else
   Serial.printf("Display IP: %s\n", ip.c_str());
 #endif
@@ -82,42 +82,28 @@ void DisplayManager::showNowPlaying(const String &title, uint32_t pos_ms, uint32
     sprite->print(durStr);
     // push sprite to top-left (only this region is updated)
     sprite->pushSprite(0, 0);
-  } else if(tft){
+  } else {
     // fallback to small-area redraw
-    tft->fillRect(0, 0, tft->width(), 72, TFT_BLACK);
-    tft->setTextSize(2);
-    tft->setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.fillRect(0, 0, tft.width(), 72, TFT_BLACK);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
     String t = title;
     if(t.length() > 28) t = t.substring(0, 28) + "...";
-    tft->setCursor(4, 6);
-    tft->print(t);
-    int barX = 4, barY = 28, barW = tft->width() - 8, barH = 12;
-    tft->drawRect(barX-1, barY-1, barW+2, barH+2, TFT_WHITE);
+    tft.setCursor(4, 6);
+    tft.print(t);
+    int barX = 4, barY = 28, barW = tft.width() - 8, barH = 12;
+    tft.drawRect(barX-1, barY-1, barW+2, barH+2, TFT_WHITE);
     int fillW = (barW * percent) / 100;
-    if(fillW > 0) tft->fillRect(barX, barY, fillW, barH, TFT_GREEN);
+    if(fillW > 0) tft.fillRect(barX, barY, fillW, barH, TFT_GREEN);
     auto fmt = [](uint32_t ms)->String{ uint32_t s = ms/1000; uint32_t m = s/60; s = s%60; char buf[16]; sprintf(buf, "%u:%02u", (unsigned)m, (unsigned)s); return String(buf); };
     String posStr = fmt(pos_ms);
     String durStr = (dur_ms==0) ? String("--:--") : fmt(dur_ms);
-    tft->setCursor(4, 48);
-    tft->print(posStr);
-    tft->setCursor(tft->width()-60, 48);
-    tft->print(durStr);
+    tft.setCursor(4, 48);
+    tft.print(posStr);
+    tft.setCursor(tft.width()-60, 48);
+    tft.print(durStr);
   }
 #else
   Serial.printf("NowPlaying: %s %u/%u (%u%%)\n", title.c_str(), pos_ms, dur_ms, percent);
-#endif
-}
-
-void DisplayManager::cleanup(){
-#if HAS_TFT
-  if(sprite){
-    sprite->deleteSprite();
-    delete sprite;
-    sprite = nullptr;
-  }
-  if(tft){
-    delete tft;
-    tft = nullptr;
-  }
 #endif
 }
