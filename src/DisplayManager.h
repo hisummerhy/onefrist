@@ -13,4 +13,9 @@ public:
 
 private:
   bool nowPlayingEnabled = true;
+  // cached values to minimize redraws
+  String lastTitle = "";
+  String lastPosStr = "";
+  String lastDurStr = "";
+  uint8_t lastPercent = 255;
 };

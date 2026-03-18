@@ -117,10 +117,13 @@ void loop(){
   if(millis() - lastDisplayMs > 500){
     lastDisplayMs = millis();
     String cur = playerController.getCurrentName();
-    uint32_t pos = audio.getAudioCurrentTime();
-    uint32_t dur = audio.getAudioFileDuration();
+    // audio library reports seconds for position/duration; convert to milliseconds
+    uint32_t pos_s = audio.getAudioCurrentTime();
+    uint32_t dur_s = audio.getAudioFileDuration();
+    uint32_t pos = pos_s * 1000u;
+    uint32_t dur = dur_s * 1000u;
     uint8_t pct = 0;
-    if(dur > 0) pct = (uint8_t)min(100, (int)((pos * 100) / dur));
+    if(dur_s > 0) pct = (uint8_t)min(100, (int)((pos_s * 100) / dur_s));
     if(enableDisplayNowPlaying){
       display.showNowPlaying(cur, pos, dur, pct);
     }
